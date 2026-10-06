@@ -1,0 +1,45 @@
+# Exclude large model files from Vercel deployment
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.sav
+*.model
+*.weights
+*.bin
+*.ckpt
+*.pb
+*.tflite
+*.onnx
+
+# Exclude dataset and training files
+dataset/
+data/
+models/
+checkpoints/
+logs/
+*.log
+
+# Exclude development files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Exclude OS files
+.DS_Store
+Thumbs.db

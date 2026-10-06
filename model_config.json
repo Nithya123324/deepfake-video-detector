@@ -1,0 +1,73 @@
+{
+  "name": "model",
+  "trainable": true,
+  "layers": [
+    {
+      "class_name": "InputLayer",
+      "config": {
+        "batch_input_shape": [
+          null,
+          224,
+          224,
+          3
+        ],
+        "dtype": "float32",
+        "sparse": false,
+        "ragged": false,
+        "name": "input_1"
+      },
+      "name": "input_1",
+      "inbound_nodes": []
+    },
+    {
+      "class_name": "Rescaling",
+      "config": {
+        "name": "rescaling",
+        "trainable": true,
+        "dtype": "float32",
+        "scale": 0.00392156862745098,
+        "offset": 0.0
+      },
+      "name": "rescaling",
+      "inbound_nodes": [
+        [
+          [
+            "input_1",
+            0,
+            0,
+            {}
+          ]
+        ]
+      ]
+    },
+    {
+      "class_name": "Normalization",
+      "config": {
+        "name": "normalization",
+        "trainable": true,
+        "dtype": "float32",
+        "axis": [
+          3
+        ],
+        "mean": null,
+        "variance": null
+      },
+      "name": "normalization",
+      "inbound_nodes": [
+        [
+          [
+            "rescaling",
+            0,
+            0,
+            {}
+          ]
+        ]
+      ]
+    },
+    {
+      "class_name": "Rescaling",
+      "config": {
+        "name": "rescaling_1",
+        "trainable": true,
+        "dtype": "float32",
+        "scale": 

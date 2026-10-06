@@ -1,0 +1,77 @@
+# Large model files (too big for GitHub)
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.sav
+*.model
+*.weights
+*.bin
+*.ckpt
+*.pb
+*.tflite
+*.onnx
+
+# Model directories
+deepfake_detector_savedmodel/
+hybrid_deepfake_detector_savedmodel/
+models/
+checkpoints/
+
+# Dataset files
+dataset/
+data/
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tiff
+*.webp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+conda_env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Test outputs
+test_*.png
+prediction_*.png
+heatmap_test.png
+
+# Evaluation results (can be regenerated)
+evaluation_results.pkl
+hybrid_training_history.pkl
+
