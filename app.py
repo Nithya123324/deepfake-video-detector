@@ -516,7 +516,7 @@ class DeepfakeDetector:
 # ======================================================
 # INITIALIZE DETECTOR
 # ======================================================
-
+from vit_detector import DeepfakeDetector
 detector = DeepfakeDetector()
 
 
