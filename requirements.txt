@@ -6,3 +6,5 @@ Pillow==10.2.0
 scipy==1.11.4
 Werkzeug==3.0.1
 gunicorn==21.2.0
+torch==2.2.2
+torchvision==0.17.2
