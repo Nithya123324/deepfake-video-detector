@@ -1,132 +1,37 @@
-
-import os
+"""PyTorch inference adapter used by the existing Flask app."""
 import logging
-import cv2
-import numpy as np
-import tensorflow as tf
-
-logger = logging.getLogger(__name__)
-
-
+from pathlib import Path
+import cv2, numpy as np, torch
+from video_model import ViT_BiLSTM
+logger=logging.getLogger(__name__)
 class DeepfakeDetector:
-    """Video detector using Vision Transformer and BiLSTM."""
-
-    
     def __init__(self):
-        self.model = None
-        self.frames_per_video = 8
-        self.image_size = 64
-        self.model_loaded = False
-
-        self.load_model()
-
+        self.model=None; self.frames_per_video=8; self.image_size=224; self.device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'); self.model_loaded=False; self.load_model()
     def load_model(self):
+        path=Path(__file__).resolve().parent/'saved_models'/'vit_bilstm_video.pth'
+        if not path.exists(): logger.warning('Trained PyTorch model not found at %s',path); self.model_loaded=False; return False
         try:
-            model_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "vit_video_model.keras"
-            )
-
-            if not os.path.isfile(model_path):
-                logger.error("vit_video_model.keras not found.")
-                return False
-
-            self.model = tf.keras.models.load_model(model_path)
-
-            if tuple(self.model.input_shape[1:]) != (8, 64, 64, 3):
-                logger.error("Unexpected ViT input shape: %s",
-                             self.model.input_shape)
-                self.model = None
-                return False
-
-            self.model_loaded = True
-            logger.info("ViT + BiLSTM model loaded: %s",
-                        self.model.input_shape)
-            return True
-
-        except Exception:
-            logger.exception("Could not load ViT model.")
-            self.model = None
-            self.model_loaded = False
-            return False
-
-    def predict_video(self, video_path):
-        if not self.model_loaded or self.model is None:
-            return None, "ViT model not loaded"
-
-        cap = cv2.VideoCapture(video_path)
-
+            checkpoint=torch.load(path,map_location=self.device,weights_only=False); self.frames_per_video=int(checkpoint.get('frames_per_video',8)); self.model=ViT_BiLSTM(); self.model.load_state_dict(checkpoint['state_dict']); self.model.to(self.device).eval(); self.model_loaded=True; return True
+        except Exception: logger.exception('Unable to load PyTorch video model'); self.model=None; self.model_loaded=False; return False
+    def predict_video(self,video_path):
+        if not self.model_loaded: return None,'Trained PyTorch model not loaded. Train the model first.'
+        cap=cv2.VideoCapture(str(video_path))
         try:
-            if not cap.isOpened():
-                return None, "Could not open video"
-
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            fps = float(cap.get(cv2.CAP_PROP_FPS))
-
-            if total_frames <= 0:
-                return None, "Video contains no readable frames"
-
-            if not np.isfinite(fps) or fps <= 0:
-                fps = 30.0
-
-            duration = total_frames / fps
-            indices = np.linspace(
-                0, total_frames - 1,
-                self.frames_per_video, dtype=int
-            )
-
-            frames = []
-            for idx in indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
-                ok, frame = cap.read()
-
-                if ok and frame is not None:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame = cv2.resize(
-                        frame, (self.image_size, self.image_size)
-                    )
-                    frames.append(frame.astype(np.float32) / 255.0)
-
-            if not frames:
-                return None, "Could not extract video frames"
-
-            while len(frames) < self.frames_per_video:
-                frames.append(frames[-1].copy())
-
-            video_input = np.expand_dims(
-                np.stack(frames[:self.frames_per_video]), axis=0
-            )
-
-            score = float(
-                np.asarray(
-                    self.model.predict(video_input, verbose=0)
-                ).reshape(-1)[0]
-            )
-
-            if not np.isfinite(score):
-                return None, "Model returned an invalid prediction"
-
-            real_probability = float(np.clip(score, 0, 1))
-            fake_probability = 1.0 - real_probability
-
-            prediction = "REAL" if real_probability >= 0.5 else "FAKE"
-            confidence = max(real_probability, fake_probability)
-
-            return {
-                "prediction": prediction,
-                "confidence": confidence,
-                "real_probability": real_probability,
-                "fake_probability": fake_probability,
-                "frames_analyzed": self.frames_per_video,
-                "total_frames": total_frames,
-                "fps": fps,
-                "duration": duration,
-                "selected_frames": self.frames_per_video
-            }, None
-
-        except Exception as exc:
-            logger.exception("Video prediction failed.")
-            return None, str(exc)
-
-        finally:
-            cap.release()
+            total=int(cap.get(cv2.CAP_PROP_FRAME_COUNT)); fps=float(cap.get(cv2.CAP_PROP_FPS) or 30); 
+            if total<=0 or not cap.isOpened(): return None,'Could not open video or no frames found.'
+            indices=np.linspace(0,total-1,self.frames_per_video,dtype=int); frames=[]; i=0; target=0
+            while target<len(indices):
+                ok,frame=cap.read()
+                if not ok: break
+                if i==indices[target]:
+                    frame=cv2.cvtColor(frame,cv2.COLOR_BGR2RGB); frame=cv2.resize(frame,(224,224)); frames.append(frame.astype(np.float32)/255.); target+=1
+                i+=1
+            if not frames:return None,'Could not extract frames.'
+            while len(frames)<self.frames_per_video: frames.append(frames[-1].copy())
+            x=torch.from_numpy(np.stack(frames)).permute(0,3,1,2).float().unsqueeze(0)
+            mean=torch.tensor([.485,.456,.406]).view(1,1,3,1,1); std=torch.tensor([.229,.224,.225]).view(1,1,3,1,1); x=(x-mean)/std
+            with torch.no_grad(): p=float(torch.softmax(self.model(x.to(self.device)),dim=1)[0,1].item())
+            fake=1-p; label='REAL' if p>=.5 else 'FAKE'
+            return {'prediction':label,'confidence':max(p,fake),'real_probability':p,'fake_probability':fake,'frames_analyzed':len(frames),'total_frames':total,'fps':fps,'duration':total/max(fps,1),'selected_frames':len(frames)},None
+        except Exception as e: logger.exception('Prediction failed'); return None,str(e)
+        finally: cap.release()

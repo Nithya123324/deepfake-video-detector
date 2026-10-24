@@ -329,21 +329,14 @@ class DeepfakeDetector:
             # AUTOMATIC FRAME COUNT
             # ------------------------------------------
 
-            if duration <= 60:
-                max_frames = 30
+            # OPTIMIZED FRAME COUNT
 
-            elif duration <= 5 * 60:
-                max_frames = 60
+            max_frames = 16
 
-            elif duration <= 10 * 60:
-                max_frames = 120
-
-            elif duration <= 20 * 60:
-                max_frames = 240
-
-            else:
-                max_frames = 360
-
+            number_of_frames = min(
+                max_frames,
+                total_frames
+            )
             # ------------------------------------------
             # SELECT FRAMES EVENLY
             # ------------------------------------------

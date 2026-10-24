@@ -1,20 +1,50 @@
-import tensorflow as tf
+import torch
+import torch.nn as nn
+from torchvision.models import vit_b_16, ViT_B_16_Weights
 
-def build_video_deepfake_model(frames_per_video: int = 60, image_size: tuple = (224, 224, 3)) -> tf.keras.Model:
-    inputs = tf.keras.Input(shape=(frames_per_video, *image_size), name="video_input")
-    backbone = tf.keras.applications.EfficientNetB0(include_top=False, weights="imagenet", input_shape=image_size, pooling=None)
-    frame_features = tf.keras.layers.TimeDistributed(backbone, name="efficientnet_timedistributed")(inputs)
-    frame_features = tf.keras.layers.TimeDistributed(tf.keras.layers.GlobalAveragePooling2D(), name="frame_global_pool")(frame_features)
-    attention_output = tf.keras.layers.MultiHeadAttention(num_heads=4, key_dim=64, name="video_attention")(frame_features, frame_features)
-    x = tf.keras.layers.Add(name="residual_attention")([frame_features, attention_output])
-    x = tf.keras.layers.LayerNormalization(epsilon=1e-6, name="sequence_norm")(x)
-    x = tf.keras.layers.GlobalAveragePooling1D(name="temporal_pool")(x)
-    x = tf.keras.layers.Dense(128, activation="relu", name="dense_128")(x)
-    x = tf.keras.layers.Dropout(0.3, name="dropout_1")(x)
-    outputs = tf.keras.layers.Dense(1, activation="sigmoid", name="deepfake_output")(x)
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name="video_deepfake_model")
-    return model
+class ViT_BiLSTM(nn.Module):
+    def __init__(self, hidden_dim=256, num_layers=2, num_classes=2):
+        super(ViT_BiLSTM, self).__init__()
+        
+        # Vision Transformer backbone
+        from torchvision.models import ViT_B_16_Weights
+        self.vit = vit_b_16(weights=ViT_B_16_Weights.DEFAULT)
+        self.vit.heads = nn.Identity()  # remove default classifier
+        
+        # BiLSTM for temporal modeling
+        self.lstm = nn.LSTM(
+            input_size=768,   # ViT embedding size
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True
+        )
+        
+        # Final classifier
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_dim * 2, 128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes)
+        )
 
-def compile_model(model: tf.keras.Model, learning_rate: float = 1e-4):
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss="binary_crossentropy", metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.Precision(name="precision"), tf.keras.metrics.Recall(name="recall"), tf.keras.metrics.AUC(name="roc_auc")])
-    return model
+    def forward(self, x):
+        # x shape: (batch, seq_len, C, H, W)
+        batch_size, seq_len, C, H, W = x.size()
+        
+        # Flatten sequence for ViT
+        x = x.view(batch_size * seq_len, C, H, W)
+        vit_features = self.vit(x)  # (batch*seq_len, 768)
+        
+        # Reshape back to sequence
+        vit_features = vit_features.view(batch_size, seq_len, -1)
+        
+        # BiLSTM
+        lstm_out, _ = self.lstm(vit_features)  # (batch, seq_len, hidden*2)
+        
+        # Use last timestep
+        last_out = lstm_out[:, -1, :]
+        
+        # Classification
+        out = self.fc(last_out)
+        return out
